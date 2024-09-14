@@ -1,0 +1,59 @@
+pr: 
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  # step 1: install python
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+      addToPath: true
+    displayName: 'Install Python'
+
+  # step 2: Install dependencies
+  - script: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+    displayName: 'Install dependencies'
+
+  # step 3: Run tests
+  - script: |
+      pytest
+    displayName: 'Run Tests'
+
+  # step 4: Code Lint
+  - script: |
+      flake8 .
+    displayName: 'Lint Code'
+  
+  # Create a directory to stage the function app files
+  - task: CopyFiles@2
+    inputs:
+      SourceFolder: 'AddFunction'
+      Contents: '**'
+      TargetFolder: '${Build.ArtifactStagingDirectory}/functionapp'
+    displayName: 'Stage files for packaging'
+  
+  # Zip the function app package 
+  - task: ArchiveFiles@2
+    inputs:
+      rootFolderOrFile: '${Build.ArtifactStagingDirectory}/functionapp'
+      includeRootFolder: false
+      archiveType: 'zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+      replaceExistingArchive: true
+  
+  # Deploy to Azure Function App
+  - task: AzureFunctionApp@2
+    inputs:
+      connectedServiceNameARM: 'function-app'
+      appType: 'functionAppLinux'
+      appName: 'add-function-demo'
+      package: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+      runtimeStack: 'PYTHON|3.11'
+    displayName: 'Deploy to Azure Function App'
+
